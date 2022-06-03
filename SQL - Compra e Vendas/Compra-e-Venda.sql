@@ -37,7 +37,6 @@ CREATE TABLE tbl_endereco (
     PRIMARY KEY (cep)
 );
 
-DESC tbl_cliente;
 
 /* CRIAÇÃO DA TABELA DE CLIENTES */
 
@@ -2275,16 +2274,16 @@ INSERT INTO tbl_produto (nome_produto, desc_produto,unid_medida, estoque_atual, 
 
 
 INSERT INTO tbl_cliente(nome_cliente, cpf, data_nasc, cep, numero, complemento) VALUES 
-('Marcos Costa de Sousa','12345678901','1981-02-06',6768100,'1525','apto 166C'),
-('Zoroastro Zoando','01987654321','1989-06-15',6757190,'250',''),
-('Idelbrandolâncio Silva','54698721364','1974-09-27',6753001,'120',''),
-('Cosmólio Ferreira','41368529687','1966-12-01',6753020,'25','apto 255 F'),
-('Conegunda Prado','54781269501','1950-10-06',6753020,'50','apto 166C'),
-('Brogundes Asmônio','41256398745','1940-05-10',6753400,'100',''),
-('Iscruência da Silva','12457965823','1974-11-25',6803040,'5',''),
-('Zizafânio Zizundo','54123698562','1964-08-14',6803140,'25',''),
-('Ricuerda Zunda','21698534589','1934-10-14',6803045,'123',''),
-('Aninoado Zinzão','25639856971','1976-12-25',6803070,'50','');
+	('Marcos Costa de Sousa','12345678901','1981-02-06',6768100,'1525','apto 166C'),
+	('Zoroastro Zoando','01987654321','1989-06-15',6757190,'250',''),
+	('Idelbrandolâncio Silva','54698721364','1974-09-27',6753001,'120',''),
+	('Cosmólio Ferreira','41368529687','1966-12-01',6753020,'25','apto 255 F'),
+	('Conegunda Prado','54781269501','1950-10-06',6753020,'50','apto 166C'),
+	('Brogundes Asmônio','41256398745','1940-05-10',6753400,'100',''),
+	('Iscruência da Silva','12457965823','1974-11-25',6803040,'5',''),
+	('Zizafânio Zizundo','54123698562','1964-08-14',6803140,'25',''),
+	('Ricuerda Zunda','21698534589','1934-10-14',6803045,'123',''),
+	('Aninoado Zinzão','25639856971','1976-12-25',6803070,'50','');
 
 SELECT * FROM tbl_cliente;
 
@@ -2334,7 +2333,7 @@ SELECT count(*) QuantidadeItens, a.nome_cliente NomeDoCliente, a.cep CEP FROM tb
 	JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
 	JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
 	JOIN tbl_produto d ON c.i_cod_produto = d.cod_produto
-	GROUP BY a.nome_cliente;
+	GROUP BY a.nome_cliente, a.cep;
 	
 #Quantidade de Itens de um pedido específico por um indivíduo
 
@@ -2343,7 +2342,7 @@ SELECT count(*) QuantidadeItens, b.cod_pedido Pedido, a.nome_cliente NomeDoClien
 	JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
 	JOIN tbl_produto d ON c.i_cod_produto = d.cod_produto
 	WHERE b.cod_pedido = 1
-    GROUP BY a.nome_cliente;	
+    GROUP BY a.nome_cliente, a.cep;	
     
 #Quantidade de Itens de todos os pedidos por um indivíduo
 
@@ -2352,7 +2351,7 @@ SELECT count(*) QuantidadeItens, b.cod_pedido Pedido, a.nome_cliente NomeDoClien
 	JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
 	JOIN tbl_produto d ON c.i_cod_produto = d.cod_produto
 	WHERE a.cod_cliente= 1
-    GROUP BY a.nome_cliente;	
+    GROUP BY a.nome_cliente, a.cep;	
 	
 #Quantidade de pedidos por indivíduo 
 
@@ -2537,3 +2536,320 @@ SELECT a.nome_cliente NomeCliente, b.cod_pedido CodigoPedido, sum(c.qtde) Quanti
     WHERE b.cod_pedido = 1
     GROUP BY a.nome_cliente;
     
+
+begin;
+update tbl_endereco set logradouro = 'vish';
+rollback;
+    
+SELECT * from tbl_endereco;
+    
+    
+# VIEWS
+
+CREATE VIEW vw_cliped AS
+	SELECT c.cod_cliente codigo, c.nome_cliente nome, p.cod_pedido pedido, p.data_pedido data_requisicao
+    from tbl_cliente c, tbl_pedido p
+    where c.cod_cliente = p.cod_cliente;	
+    
+SELECT * FROM vw_cliped;
+
+CREATE VIEW vw_clipedprod AS
+	SELECT c.cod_cliente codigo, c.nome_cliente nome, p.cod_pedido pedido, p.data_pedido data_requisicao, i.i_cod_produto produto, i.qtde
+    FROM tbl_cliente c, tbl_pedido p, tbl_itempedido i
+    WHERE c.cod_cliente = p.cod_cliente
+	AND i.i_cod_pedido = p.cod_pedido;
+    
+SELECT * FROM vw_clipedprod;
+
+CREATE VIEW vw_clipedprodTotal AS
+	SELECT c.cod_cliente codigo, c.nome_cliente nome, p.cod_pedido pedido, p.data_pedido data_requisicao, i.i_cod_produto produto, i.qtde, pr.valor, i.qtde * pr.valor totalComprado
+    FROM tbl_cliente c, tbl_pedido p, tbl_itempedido i, tbl_produto pr
+    WHERE c.cod_cliente = p.cod_cliente
+	AND i.i_cod_pedido = p.cod_pedido
+    AND i.i_cod_produto = pr.cod_produto;
+    
+SELECT * FROM vw_clipedprodTotal; 
+
+
+# VIEW CONSOLIDADA
+
+CREATE VIEW vw_consolidade (cod_produto, cod_pedido, valor) AS
+	SELECT p.cod_pedido, i.i_cod_produto, i.qtde * pr.valor
+	FROM tbl_pedido p, tbl_itempedido i, tbl_produto pr
+    WHERE i.i_cod_pedido = p.cod_pedido
+    AND i.i_cod_produto = pr.cod_produto; 
+	
+SELECT * FROM vw_consolidade;
+
+
+
+# A) Que enxerguem os dados do cliente (código e nome) e pedidos (número do pedido,
+# data do pedido e data de entrega), onde a data do pedido seja superior a
+# 30/01/2014;
+
+
+SELECT a.cod_cliente AS CodigoCliente, a.nome_cliente AS NomeCliente, b.cod_pedido AS CodigoPedido, b.data_pedido AS DataRequisição, b.data_entrega AS DataEntrega FROM tbl_cliente a
+	JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
+	WHERE date(b.data_pedido) > '2014-01-30';
+
+# VIEW Version
+
+CREATE VIEW vw_dadosClientePedidoData (CodigoCliente, NomeCliente, CodigoPedido, DataRequisição, DataEntrega) AS
+	SELECT a.cod_cliente, a.nome_cliente, b.cod_pedido, b.data_pedido, b.data_entrega FROM tbl_cliente a
+		JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
+		WHERE date(b.data_pedido) > '2014-01-30';
+
+SELECT * FROM vw_dadosClientePedidoData;
+
+# b) Que enxerguem os dados do cliente (código do cliente e nome), dados do pedido
+# (código do pedido, data do pedido e data da entrega), os dados do item do pedido
+# (quantidade e código do produto), onde a quantidade destes produtos sejam
+# maiores de 25;
+
+SELECT a.cod_cliente AS CodigoCliente, a.nome_cliente AS NomeCliente, b.cod_pedido AS CodigoPedido, b.data_pedido AS DataRequisição, b.data_entrega AS DataEntrega, c.qtde AS Quantidade, c.i_cod_produto AS CodigoProduto FROM tbl_cliente a
+	JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
+	JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
+	WHERE c.qtde > 25;
+    
+# VIEW Version
+
+CREATE VIEW vw_dadosClientePedido (CodigoCliente, NomeCliente, CodigoPedido, DataRequisição, DataEntrega, Quantidade, CodigoProduto) AS
+	SELECT a.cod_cliente, a.nome_cliente, b.cod_pedido, b.data_pedido, b.data_entrega, c.qtde, c.i_cod_produto FROM tbl_cliente a
+		JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
+		JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
+		WHERE c.qtde > 25;
+        
+SELECT * FROM vw_dadosClientePedido;
+
+# c) Que enxerguem os dados do pedido (código do pedido, código do cliente), os
+# dados do item do pedido (quantidade, código do produto e descrição do produto);
+
+SELECT b.cod_pedido AS CodigoPedido, a.cod_cliente AS CodigoCliente, c.qtde AS Quantidade, d.cod_produto AS CodigoProduto, d.desc_produto AS DescriçãoProduto FROM tbl_cliente a
+	JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
+	JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
+	JOIN tbl_produto d ON c.i_cod_produto = d.cod_produto;
+	
+# VIEW Version
+
+CREATE VIEW vw_dadosPedidoItem (CodigoPedido, CodigoCliente, Quantidade, CodigoProduto, DescriçãoProduto) AS
+	SELECT b.cod_pedido, a.cod_cliente, c.qtde, d.cod_produto, d.desc_produto FROM tbl_cliente a
+		JOIN tbl_pedido b ON a.cod_cliente = b.cod_cliente
+		JOIN tbl_itempedido c ON b.cod_pedido = c.i_cod_pedido
+		JOIN tbl_produto d ON c.i_cod_produto = d.cod_produto;
+
+SELECT * FROM vw_dadosPedidoItem;
+
+
+# d) Que enxerguem os produtos reajustados em 11,2 %, onde deverá ser mostrado o
+# código e a descrição do produto, o valor atual e o valor reajustado.
+
+SELECT cod_produto AS CodigoProduto, desc_produto AS DescriçãoProduto, valor AS ValorAtual, CAST((valor + valor * 0.112) AS DECIMAL(4,1)) AS ValorReajustado FROM tbl_produto;
+
+# VIEW Version
+
+CREATE VIEW vw_prodReajust (CodigoProduto, DescriçãoProduto, ValorAtual, ValorReajustado) AS
+	SELECT cod_produto, desc_produto, valor, CAST((valor + valor * 0.112) AS DECIMAL(4,1)) FROM tbl_produto;
+
+SELECT * FROM vw_prodReajust;
+
+## TBL LOG
+
+CREATE TABLE tbl_log(
+	id_log INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    usuario VARCHAR(50) NOT NULL,
+    dt_log DATE NOT NULL,
+    hora TIME NOT NULL
+);
+
+DELIMITER $
+
+CREATE TRIGGER trg_logCliente1 BEFORE DELETE 
+ON tbl_cliente 
+FOR EACH ROW
+BEGIN
+	INSERT INTO tbl_log 
+                (usuario, dt_log, hora)
+	VALUES (user(), curdate(), curtime(), "EXCLUSÃO", "tbl_cliente");
+
+END $
+DELIMITER ;
+
+# ATIVIDADE - TRIGGER / PROCEDURY
+
+/*Modifique a tabela tbl_log acrescentando um campo onde armazene o tipo de
+operação realizada, sendo: “INSERÇÃO”, “ATUALIZAÇÃO” ou “EXCLUSÃO” e
+outro campo que armazene a tabela que está sendo realizadas as ações*/
+
+ALTER TABLE tbl_log ADD COLUMN operacao_tipo ENUM('INSERÇÃO','ATUALIZAÇÃO','EXCLUSÃO');
+ALTER TABLE tbl_log ADD COLUMN tabela VARCHAR(30);
+
+/*De acordo com o exercício A crie uma trigger que ao atualizar e antes de qualquer
+ação na tabela de Pedidos;*/
+
+DELIMITER $
+
+CREATE TRIGGER trg_logPedidos1 BEFORE UPDATE 
+ON tbl_pedido
+FOR EACH ROW
+BEGIN
+	INSERT INTO tbl_log 
+                (usuario, dt_log, hora)
+	VALUES (user(), curdate(), curtime(), "ATUALIZAÇÃO", "tbl_pedidos");
+
+END $
+DELIMITER ;
+
+/*De acordo com o exercício A crie uma trigger que ao excluir e antes de qualquer
+ação na tabela de Produtos*/
+
+
+DELIMITER $
+
+CREATE TRIGGER trg_logProduto1 BEFORE DELETE 
+ON tbl_produto
+FOR EACH ROW
+BEGIN
+	INSERT INTO tbl_log 
+                (usuario, dt_log, hora)
+	VALUES (user(), curdate(), curtime(), "EXCLUSÃO", "tbl_produto");
+
+END $
+
+DELIMITER ;
+
+/*De acordo com o exercício A crie uma trigger que ao inserir e depois de qualquer
+ação na tabela de Clientes*/
+
+DELIMITER $
+
+CREATE TRIGGER trg_logCliente2 AFTER INSERT
+ON tbl_cliente
+FOR EACH ROW
+BEGIN
+	INSERT INTO tbl_log 
+                (usuario, dt_log, hora)
+	VALUES (user(), curdate(), curtime(), "INSERÇÃO", "tbl_cliente");
+
+END $
+
+DELIMITER ;
+
+#-----------------------------------------------------------------------------------------------#
+
+DELIMITER $$
+
+CREATE PROCEDURE prc_ins_prod (IN vnomeprod CHAR(100),
+							   IN vvalor DECIMAL(10,2),
+							   OUT msg VARCHAR(100))
+		
+        BEGIN 
+             DECLARE valor DECIMAL(10,2);
+             DECLARE erro BOOL;
+             
+             SET erro = TRUE;
+             
+             IF (vvalor > 0) THEN
+                 SET valor = vvalor;
+			 ELSE 
+                 SET erro = FALSE;
+                 SET msg = "valor zerado, verique!";
+			 END IF;
+             
+             IF (erro) THEN
+				 INSERT INTO tbl_produto (nome_produto, valor)
+                 VALUES (vnomeprod, vvalor);
+                 SET msg = "incluindo com sucesso!";
+			 END IF;
+		END $$
+DELIMITER ;
+
+CALL prc_ins_prod('ovo',2.55,@msg);
+
+SELECT @msg;
+
+SELECT * FROM tbl_produto;
+
+# ATIVIDADE 24-05-2022
+
+/*Crie um procedimento armazenado que é passado o código do produto na tabela de
+produtos e um percentual para calcular o acréscimo ao valor desse mesmo produto, o
+retorno deverá ser uma mensagem informando se a operação foi feita de forma correta.*/
+
+# DROP PROCEDURE pcr_calcAcrescimo;
+
+DELIMITER $$
+
+	CREATE PROCEDURE pcr_calcAcrescimo(IN p_cod_prod INT, IN p_percentual DECIMAL, OUT msg VARCHAR(100), OUT percentualResult DECIMAL(10,2))
+    
+   BEGIN
+		DECLARE percentual DECIMAL(10,2);
+        DECLARE valorFinal DECIMAL(10,2);
+        DECLARE valorOriginal DECIMAL(10,2);
+		DECLARE erro BOOL;
+        
+        SET erro = TRUE;
+        
+        IF (p_percentual > 0) THEN
+			 SET percentual = p_percentual/100;
+		
+        ELSE
+			SET erro = FALSE;
+            SET msg = "Percentual zerado";
+        END IF;
+        
+         IF (erro) THEN
+         
+				SET valorOriginal = (SELECT valor FROM tbl_produto WHERE cod_produto = p_cod_prod);
+                
+                IF(valorOriginal IS NULL) THEN
+					SET msg = "Código inexistente";
+				
+                ELSE
+					SET valorFinal = valorOriginal + (valorOriginal * percentual);
+					UPDATE tbl_produto SET valor = valorFinal WHERE cod_produto = p_cod_prod;
+					SET msg = "Valor recebeu acrescimo com sucesso!";
+				END IF;
+		END IF;
+    END $$
+DELIMITER ;
+
+CALL pcr_calcAcrescimo(2,10,@msg,@percentualResult);
+
+SELECT * FROM tbl_produto;
+
+SELECT @msg;
+SELECT @percentualResult;
+
+/*Crie um procedimento armazenado que grave na tabela de log (Exercício d) da
+atividade anterior, no campo tipo de operação, informem “INS_TRIGGER” o registro de
+auditoria;*/
+
+DELIMITER $$
+
+	CREATE PROCEDURE pcr_insertLog(IN p_tabela VARCHAR(30))
+    
+	BEGIN
+		INSERT INTO tbl_log (usuario, dt_log, hora, operacao, tabela)
+		VALUES (user(), curdate(), curtime(), "INS_TRIGGER", p_tabela);
+    END $$
+DELIMITER ;
+
+/*DESAFIO: agora remova a TRIGGER que você criou conforme o exercício anterior - d),
+montando uma nova TRIGGER, só que agora, a mesma deverá chamar a execução do
+procedimento armazenado criado nessa atividade no item b).*/
+
+/*De acordo com o exercício A crie uma trigger que ao inserir e depois de qualquer
+ação na tabela de Clientes*/
+
+DELIMITER $
+
+CREATE TRIGGER trg_logCliente2 AFTER INSERT
+ON tbl_cliente
+FOR EACH ROW
+BEGIN
+	CALL pcr_insertLog(tbl_cliente);
+END $
+
+DELIMITER ;
+
+
