@@ -2852,4 +2852,398 @@ END $
 
 DELIMITER ;
 
+/*-----------------------------------------------------------------------------------------------*/
 
+/* TABELA TEMPORÁRIA */
+CREATE TEMPORARY TABLE tbl_aux (
+	num_exec   INTEGER NOT NULL,
+	seq        INTEGER NOT NULL,
+	descricao  VARCHAR(20),
+	tipo_repet VARCHAR(10),
+	PRIMARY KEY(num_exec, seq)
+);
+
+/* ESTRUTURA DE REPETIÇÃO WHILE */
+
+DELIMITER $$
+CREATE PROCEDURE acum_while (IN limite INT)
+BEGIN
+	DECLARE contador INT DEFAULT 0;
+	DECLARE soma INT DEFAULT 0;
+	DECLARE result VARCHAR(20);
+	DECLARE num_exec1 INTEGER;
+	
+	SELECT IFNULL(MAX(num_exec) + 1,1) num_exec INTO num_exec1 FROM tbl_aux;
+	
+	WHILE contador < limite DO
+		SET contador = contador + 1;
+		SET soma = soma + contador;
+		INSERT INTO tbl_aux(num_exec, seq, descricao, tipo_repet)
+					 VALUES(num_exec1, contador, soma, 'while');
+	END WHILE;
+	
+	SELECT * FROM tbl_aux;
+END $$
+DELIMITER ;
+
+CALL acum_while(12);
+
+/* ESTRUTURA DE REPETIÇÃO LOOP */
+
+DELIMITER $$
+CREATE PROCEDURE acum_loop (IN limite INT)
+BEGIN
+	DECLARE contador INT DEFAULT 0;
+	DECLARE soma INT DEFAULT 0;
+	DECLARE result VARCHAR(20);
+	DECLARE num_exec1 INTEGER;
+	
+	SELECT IFNULL(MAX(num_exec) + 1,1) num_exec INTO num_exec1 FROM tbl_aux;
+	
+	loop_acum : loop
+		
+		SET contador = contador + 1;
+		SET soma = soma + contador;
+		
+		IF contador >= limite THEN
+			LEAVE loop_acum;
+		ELSE
+			INSERT INTO tbl_aux(num_exec, seq, descricao, tipo_repet)
+						 VALUES(num_exec1, contador, soma, 'loop');
+		END IF;
+	END LOOP loop_acum;
+	SELECT * FROM tbl_aux;
+END $$
+DELIMITER ;
+
+CALL acum_loop(12);
+
+/* ESTRUTURA DE REPETIÇÃO REPEAT */
+
+DELIMITER $$
+CREATE PROCEDURE acum_repeat (IN limite INT)
+BEGIN
+	DECLARE contador INT DEFAULT 0;
+	DECLARE soma INT DEFAULT 0;
+	DECLARE result VARCHAR(20);
+	DECLARE num_exec1 INTEGER;
+	
+	SELECT IFNULL(MAX(num_exec) + 1, 1) num_exec INTO num_exec1 FROM tbl_aux;
+	
+	REPEAT
+		SET contador = contador + 1;
+		SET soma = soma + contador;
+		INSERT INTO tbl_aux(num_exec, seq, descricao, tipo_repet)
+					 VALUES(num_exec1, contador, soma,'repeat');
+		
+		UNTIL contador >= limite;
+	END REPEAT;
+	SELECT * FROM tbl_aux;
+
+END $$
+DELIMITER ;
+
+CALL acum_repeat(12);
+
+/*-----------------------------------------------------------------------------------------------*/
+
+#PROCEDURE PARA CRIAÇÃO DE TABELAS TEMPORÁRIAS
+
+DROP PROCEDURE cria_tabela;
+
+DELIMITER @@
+CREATE PROCEDURE cria_tabela()
+	BEGIN
+		CREATE TEMPORARY TABLE IF NOT EXISTS tbl_auxprod (
+			aux_prod    INTEGER NOT NULL,
+			aux_desc    VARCHAR(20),
+			qtde_ajust 	VARCHAR(10),
+			data_hora 	DATETIME DEFAULT now(),
+			PRIMARY KEY(aux_prod, data_hora)
+		);
+		
+		DELETE FROM tbl_auxprod;
+	END @@
+DELIMITER ;
+
+#PROCEDURE PARA AJUSTE DE ESTOQUE
+
+DROP PROCEDURE ajusta_estoque;
+
+DELIMITER $$
+CREATE PROCEDURE ajusta_estoque(IN qtde INT, OUT msg CHAR(100))
+		BEGIN
+            -- Definição de variáveis utilizadas na procedure
+			DECLARE p_linha    INT DEFAULT 0;
+			DECLARE p_codigo   INT DEFAULT 0;
+			DECLARE p_descri   VARCHAR(100);
+			DECLARE p_estoque  INT DEFAULT 0;
+			DECLARE p_status   INT DEFAULT 0;
+		
+			-- Definição do cursor
+			 
+			DECLARE meucursor CURSOR FOR  SELECT cod_produto, nome_produto, estoque_atual FROM tbl_produto;
+			
+			-- Definição de variável de controle de looping do cursor
+			DECLARE CONTINUE HANDLER FOR NOT FOUND SET p_linha = 1;
+			
+			-- Abertura do cursor
+			OPEN meucursor;
+			
+			-- Chamada da procedure de criação da tabela temporária
+			CALL cria_tabela();
+            
+            SET SQL_SAFE_UPDATES=0;
+			
+			-- Looping de execução do cursor
+			meuloop: loop
+				fetch meucursor INTO p_codigo, p_descri, p_estoque;
+				
+				-- Controle de existir mais registros na tabela (Caso o cursor acabar, ele irá seta p_linha = 1)
+				IF p_linha = 1 THEN
+					
+                    -- Abaixo, há um SELECT com count(*) na tabela de auxílio, indicando quantos campos foram inseridos 
+                    -- (Caso for maior que 0, houve inserção na tabela de auxílio)
+					SELECT COUNT(*) INTO p_status FROM tbl_auxprod;
+					IF p_status > 0 THEN
+					
+						-- Seleciona a tabela temporária
+						SELECT * FROM tbl_auxprod;
+						LEAVE meuloop;
+					
+                    -- (Caso for menor que 0, não houve inserção na tabela de auxílio)
+                    ELSE
+				
+						-- A procedure rodou mas sem nenhum processamento
+						SET msg = "Nada processado!";
+						SELECT msg;
+						LEAVE meuloop;
+					END IF;
+				
+                -- Caso o cursor ainda possuir linhas, haverá uma verificação continua para a atualização do estoque com os itens em que o estoque for igual a quantidade informada.  
+                ELSEIF p_estoque = qtde THEN
+					
+					-- Atualiza o estoque
+					UPDATE tbl_produto SET estoque_atual = qtde + 2 WHERE cod_produto = p_codigo;
+					
+					-- Insere os dados na tabela temporária
+					INSERT INTO tbl_auxprod (aux_prod, aux_desc, qtde_ajust)
+									  VALUES(p_codigo, p_descri, p_estoque + 2);
+				END IF;
+			END loop meuloop;
+			
+			-- Fechamento do cursor
+			CLOSE meucursor;
+            SET SQL_SAFE_UPDATES=1;
+		END $$
+DELIMITER ;
+
+SELECT * FROM tbl_produto;
+  
+SET SQL_SAFE_UPDATES=0;
+CALL ajusta_estoque(2, @msg);
+CALL cria_tabela;
+
+/*
+	1º - Analisem a procedure que acabamos de fazer e procure melhorar sua
+	performance, otimizando-a de acordo com a proposta passada pelo professor;
+*/
+
+
+
+/*
+	2º - Modifique a procedure que usamos em cursores de forma que ao passar um
+	parâmetro (percentual de aumento), a tabela de produto tenha o valor do mesmo reajustado,
+	mas somente para os produtos em que o valor seja inferior a R$ 10,00.
+*/
+
+DROP PROCEDURE cria_tabelaComPreco;
+
+DELIMITER @@
+CREATE PROCEDURE cria_tabelaComPreco()
+	BEGIN
+		CREATE TEMPORARY TABLE IF NOT EXISTS tbl_auxprodPreco (
+			aux_prod    INTEGER NOT NULL,
+			aux_desc    VARCHAR(20),
+			qtde_ajust 	VARCHAR(10),
+			valor_ajust DECIMAL(10,2),
+			data_hora 	DATETIME DEFAULT now(),
+			PRIMARY KEY(aux_prod, data_hora)
+		);
+		
+		DELETE FROM tbl_auxprodPreco;
+	END @@
+DELIMITER ;
+
+
+DROP PROCEDURE ajusta_estoqueEPreco;
+
+DELIMITER $$
+CREATE PROCEDURE ajusta_estoqueEPreco(IN qtde INT, IN perc_aument DECIMAL, OUT msg CHAR(100))
+		BEGIN
+            -- Definição de variáveis utilizadas na procedure
+			DECLARE p_linha    INT DEFAULT 0;
+			DECLARE p_codigo   INT DEFAULT 0;
+			DECLARE p_descri   VARCHAR(100);
+			DECLARE p_estoque  INT DEFAULT 0;
+			DECLARE p_status   INT DEFAULT 0;
+			DECLARE p_valor    DECIMAL(10,2) DEFAULT 0;
+			
+			DECLARE p_percentual DECIMAL(10,2) DEFAULT 0;
+		
+			-- Definição do cursor
+			 
+			DECLARE meucursor CURSOR FOR  SELECT cod_produto, nome_produto, estoque_atual, valor FROM tbl_produto;
+			
+			-- Definição de variável de controle de looping do cursor
+			DECLARE CONTINUE HANDLER FOR NOT FOUND SET p_linha = 1;
+			
+			-- Abertura do cursor
+			OPEN meucursor;
+			
+			-- Chamada da procedure de criação da tabela temporária
+			CALL cria_tabelaComPreco();
+            
+			SET p_percentual = perc_aument/100;
+			
+			-- Looping de execução do cursor
+			meuloop: loop
+				fetch meucursor INTO p_codigo, p_descri, p_estoque, p_valor;
+				
+				-- Controle de existir mais registros na tabela (Caso o cursor acabar, ele irá seta p_linha = 1)
+				IF p_linha = 1 THEN
+					
+                    -- Abaixo, há um SELECT com count(*) na tabela de auxílio, indicando quantos campos foram inseridos 
+                    -- (Caso for maior que 0, houve inserção na tabela de auxílio)
+					SELECT COUNT(*) INTO p_status FROM tbl_auxprodPreco;
+					IF p_status > 0 THEN
+					
+						-- Seleciona a tabela temporária
+						SELECT * FROM tbl_auxprodPreco;
+						LEAVE meuloop;
+					
+                    -- (Caso for menor que 0, não houve inserção na tabela de auxílio)
+                    ELSE
+				
+						-- A procedure rodou mas sem nenhum processamento
+						SET msg = "Nada processado!";
+						SELECT msg;
+						LEAVE meuloop;
+					END IF;
+				
+                -- Caso o cursor ainda possuir linhas, haverá uma verificação continua para a atualização do estoque com os itens em que o estoque for igual a quantidade informada.  
+                ELSEIF p_estoque = qtde THEN
+					
+					-- Atualiza o estoque
+					UPDATE tbl_produto SET estoque_atual = qtde + 2 WHERE cod_produto = p_codigo;
+					
+					-- Insere os dados na tabela temporária
+					INSERT INTO tbl_auxprodPreco (aux_prod, aux_desc, qtde_ajust)
+									  VALUES(p_codigo, p_descri, p_estoque + 2);
+									  
+						
+					-- Ajustando o percentual do valor do produto (Caso for inferior a 10.0)
+					IF p_valor < 10.0 THEN
+						
+						UPDATE tbl_produto SET valor = p_valor + (p_valor * p_percentual) WHERE cod_produto = p_codigo;
+						UPDATE tbl_auxprodPreco SET valor_ajust = p_valor + (p_valor * p_percentual) WHERE aux_prod = p_codigo;
+					
+					ELSE 
+						
+						UPDATE tbl_auxprodPreco SET valor_ajust = 0.0 WHERE aux_prod = p_codigo;
+					
+					END IF;
+					
+				END IF;
+			END loop meuloop;
+			
+			-- Fechamento do cursor
+			CLOSE meucursor;
+		END $$
+DELIMITER ;
+
+SET SQL_SAFE_UPDATES=0;
+CALL ajusta_estoqueEPreco(110, 10, @msg);
+
+SELECT  *  FROM tbl_produto;
+
+
+
+DROP PROCEDURE ajusta_preco;
+
+DELIMITER $$
+CREATE PROCEDURE ajusta_preco(IN perc_aument DECIMAL, OUT msg CHAR(100))
+		BEGIN
+            -- Definição de variáveis utilizadas na procedure
+			DECLARE p_linha    INT DEFAULT 0;
+			DECLARE p_codigo   INT DEFAULT 0;
+			DECLARE p_descri   VARCHAR(100);
+			DECLARE p_estoque  INT DEFAULT 0;
+			DECLARE p_status   INT DEFAULT 0;
+			DECLARE p_valor    DECIMAL(10,2) DEFAULT 0;
+			
+			DECLARE p_percentual DECIMAL(10,2) DEFAULT 0;
+		
+			-- Definição do cursor
+			 
+			DECLARE meucursor CURSOR FOR  SELECT cod_produto, nome_produto, estoque_atual, valor FROM tbl_produto;
+			
+			-- Definição de variável de controle de looping do cursor
+			DECLARE CONTINUE HANDLER FOR NOT FOUND SET p_linha = 1;
+			
+			-- Abertura do cursor
+			OPEN meucursor;
+			
+			-- Chamada da procedure de criação da tabela temporária
+			CALL cria_tabelaComPreco();
+            
+			SET p_percentual = perc_aument/100;
+			
+			-- Looping de execução do cursor
+			meuloop: loop
+				fetch meucursor INTO p_codigo, p_descri, p_estoque, p_valor;
+				
+				-- Controle de existir mais registros na tabela (Caso o cursor acabar, ele irá seta p_linha = 1)
+				IF p_linha = 1 THEN
+					
+                    -- Abaixo, há um SELECT com count(*) na tabela de auxílio, indicando quantos campos foram inseridos 
+                    -- (Caso for maior que 0, houve inserção na tabela de auxílio)
+					SELECT COUNT(*) INTO p_status FROM tbl_auxprodPreco;
+					IF p_status > 0 THEN
+					
+						-- Seleciona a tabela temporária
+						SELECT * FROM tbl_auxprodPreco;
+						LEAVE meuloop;
+					
+                    -- (Caso for menor que 0, não houve inserção na tabela de auxílio)
+                    ELSE
+				
+						-- A procedure rodou mas sem nenhum processamento
+						SET msg = "Nada processado!";
+						SELECT msg;
+						LEAVE meuloop;
+					END IF;
+				
+                -- Caso o cursor ainda possuir linhas, haverá uma verificação continua para a atualização do preço com os itens em que o preço for menor que 10.0
+                ELSEIF p_valor < 10.0 THEN
+					
+					
+					-- Insere os dados na tabela temporária
+					INSERT INTO tbl_auxprodPreco (aux_prod, aux_desc, qtde_ajust)
+									  VALUES(p_codigo, p_descri, p_estoque);
+									  
+
+						
+					UPDATE tbl_produto SET valor = p_valor + (p_valor * p_percentual) WHERE cod_produto = p_codigo;
+					UPDATE tbl_auxprodPreco SET valor_ajust = p_valor + (p_valor * p_percentual) WHERE aux_prod = p_codigo;
+				
+				ELSE THEN
+					UPDATE tbl_auxprodPreco SET valor_ajust = 0.0 WHERE aux_prod = p_codigo;
+	
+				END IF;
+			END loop meuloop;
+			
+			-- Fechamento do cursor
+			CLOSE meucursor;
+		END $$
+DELIMITER ;
